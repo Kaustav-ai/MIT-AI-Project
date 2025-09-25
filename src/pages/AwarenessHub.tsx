@@ -1,21 +1,23 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  BookOpen, 
-  HelpCircle, 
-  Award, 
+import { useToast } from "@/components/ui/use-toast";
+import {
+  BookOpen,
+  HelpCircle,
+  Award,
   Search,
   Clock,
-  Users,
   CheckCircle,
   AlertCircle,
   Scan,
-  Camera
+  Camera,
+  Upload,
+  Loader2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -45,11 +47,95 @@ interface Quiz {
   points: number;
 }
 
+interface NutritionResult {
+  product: string;
+  healthScore: number;
+  nutrients: {
+    calories: number;
+    protein: number;
+    fiber: number;
+    sugar: number;
+    sodium: number;
+    carbs?: number;
+    fat?: number;
+    saturatedFat?: number;
+  };
+  recommendations: string[];
+  warnings?: string[];
+  ingredients?: string[];
+  allergens?: string[];
+}
+
+// Mock nutrition service - replace with actual API calls
+const nutritionService = {
+  analyzeImage: async (file: File): Promise<NutritionResult> => {
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Mock response based on file name or random data
+    return {
+      product: file.name.split('.')[0] || "Scanned Product",
+      healthScore: Math.floor(Math.random() * 40) + 60, // 60-100
+      nutrients: {
+        calories: Math.floor(Math.random() * 500) + 100,
+        protein: Math.floor(Math.random() * 30) + 5,
+        fiber: Math.floor(Math.random() * 10) + 1,
+        sugar: Math.floor(Math.random() * 50) + 5,
+        sodium: Math.floor(Math.random() * 500) + 50
+      },
+      recommendations: [
+        "Good source of protein",
+        "Moderate sugar content - consider portion size",
+        "Contains essential nutrients"
+      ],
+      warnings: Math.random() > 0.7 ? ["High sodium content"] : undefined,
+      allergens: Math.random() > 0.5 ? ["Gluten", "Dairy"] : undefined
+    };
+  },
+  
+  analyzeProduct: async (productName: string): Promise<NutritionResult> => {
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Mock response based on product name
+    const healthScore = productName.toLowerCase().includes("healthy") ? 85 : 
+                       productName.toLowerCase().includes("organic") ? 80 : 
+                       Math.floor(Math.random() * 40) + 50;
+    
+    return {
+      product: productName,
+      healthScore,
+      nutrients: {
+        calories: Math.floor(Math.random() * 400) + 80,
+        protein: Math.floor(Math.random() * 25) + 3,
+        fiber: Math.floor(Math.random() * 8) + 2,
+        sugar: Math.floor(Math.random() * 40) + 3,
+        sodium: Math.floor(Math.random() * 400) + 30
+      },
+      recommendations: healthScore > 70 ? [
+        "Excellent nutritional profile",
+        "Good for daily consumption",
+        "Balanced macronutrients"
+      ] : [
+        "Consider healthier alternatives",
+        "Monitor portion sizes",
+        "Combine with nutrient-rich foods"
+      ],
+      warnings: healthScore < 60 ? ["High processed content", "Added preservatives"] : undefined,
+      allergens: Math.random() > 0.6 ? ["Soy", "Nuts"] : undefined
+    };
+  }
+};
+
 const AwarenessHub = () => {
   const [activeTab, setActiveTab] = useState<"articles" | "faqs" | "quizzes" | "nutrition">("articles");
   const [searchTerm, setSearchTerm] = useState("");
-  const [nutritionResult, setNutritionResult] = useState<any>(null);
-
+  const [nutritionResult, setNutritionResult] = useState<NutritionResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [productName, setProductName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const articles: Article[] = Array.from({ length: 36 }).map((_, i) => {
     const id = (i + 1).toString();
@@ -121,7 +207,7 @@ const AwarenessHub = () => {
       category,
       readTime: 5 + (i % 7),
       author: "HealthAI Editorial Team",
-  image: "/api/placeholder/400/250"
+      image: `/api/placeholder/400/250?${i}`
     } as Article;
   });
 
@@ -143,6 +229,18 @@ const AwarenessHub = () => {
       question: "What are the warning signs of a heart attack?",
       answer: "Common signs include chest pain or discomfort, shortness of breath, nausea, lightheadedness, and pain in the arm, back, neck, or jaw. Seek immediate medical attention if you experience these symptoms.",
       category: "Emergency"
+    },
+    {
+      id: "4",
+      question: "How much water should I drink daily?",
+      answer: "The general recommendation is about 8 glasses (2 liters) per day, but this can vary based on age, activity level, and climate. Listen to your body's thirst signals.",
+      category: "Nutrition"
+    },
+    {
+      id: "5",
+      question: "What's the difference between a cold and the flu?",
+      answer: "Colds are usually milder with runny nose and sneezing, while flu symptoms are more severe and include fever, body aches, and fatigue. Flu can lead to serious complications.",
+      category: "Common Diseases"
     }
   ];
 
@@ -170,12 +268,36 @@ const AwarenessHub = () => {
       duration: 15,
       difficulty: "Hard",
       points: 100
+    },
+    {
+      id: "4",
+      title: "Mental Health Awareness",
+      questions: 12,
+      duration: 8,
+      difficulty: "Medium",
+      points: 65
+    },
+    {
+      id: "5",
+      title: "Diabetes Management",
+      questions: 18,
+      duration: 12,
+      difficulty: "Hard",
+      points: 90
+    },
+    {
+      id: "6",
+      title: "Healthy Lifestyle",
+      questions: 8,
+      duration: 5,
+      difficulty: "Easy",
+      points: 40
     }
   ];
 
   const TabButton = ({ tab, label, icon: Icon }: { tab: typeof activeTab, label: string, icon: any }) => (
     <Button
-      variant={activeTab === tab ? "hero" : "outline"}
+      variant={activeTab === tab ? "default" : "outline"}
       onClick={() => setActiveTab(tab)}
       className="flex-1"
     >
@@ -184,25 +306,80 @@ const AwarenessHub = () => {
     </Button>
   );
 
-  const handleNutritionScan = () => {
-    // Simulated nutrition analysis
-    const mockResult = {
-      product: "Whole Grain Cereal",
-      healthScore: 82,
-      nutrients: {
-        calories: 150,
-        protein: 6,
-        fiber: 5,
-        sugar: 8,
-        sodium: 200
-      },
-      recommendations: [
-        "High in fiber - Good for digestive health",
-        "Moderate sugar content - Consider portion size",
-        "Good source of protein"
-      ]
-    };
-    setNutritionResult(mockResult);
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File",
+        description: "Please upload an image file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const result = await nutritionService.analyzeImage(file);
+      setNutritionResult(result);
+      toast({
+        title: "Analysis Complete",
+        description: "Nutrition information has been analyzed successfully",
+      });
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast({
+        title: "Analysis Failed",
+        description: "Could not analyze the image. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const handleCameraCapture = () => {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  };
+
+  const handleProductAnalysis = async () => {
+    if (!productName.trim()) {
+      toast({
+        title: "Product Name Required",
+        description: "Please enter a product name to analyze",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const result = await nutritionService.analyzeProduct(productName.trim());
+      setNutritionResult(result);
+      toast({
+        title: "Analysis Complete",
+        description: `Nutrition information for ${productName} has been analyzed`,
+      });
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast({
+        title: "Analysis Failed",
+        description: "Could not find nutrition information for this product. Please try a different product name.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleBarcodeUpload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const ArticlesTab = () => (
@@ -216,51 +393,66 @@ const AwarenessHub = () => {
           className="pl-10"
         />
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {articles
           .filter(a => a.title.toLowerCase().includes(searchTerm.toLowerCase()) || a.category.toLowerCase().includes(searchTerm.toLowerCase()))
           .map((article) => (
-          <Card key={article.id} className="healthcare-card card-hover">
-            <div className="h-48 bg-muted rounded-t-lg overflow-hidden">
-              <img src={article.image} alt={article.title} className="w-full h-full object-cover" />
-            </div>
-            <CardHeader>
-              <div className="flex items-center justify-between mb-2">
-                <Badge variant="secondary">{article.category}</Badge>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="h-3 w-3 mr-1" />
-                  {article.readTime} min
+            <Card key={article.id} className="cursor-pointer transition-all duration-200 hover:shadow-lg">
+              <div className="h-48 bg-muted rounded-t-lg overflow-hidden">
+                <img src={article.image} alt={article.title} className="w-full h-full object-cover" />
+              </div>
+              <CardHeader>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="secondary">{article.category}</Badge>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {article.readTime} min
+                  </div>
                 </div>
-              </div>
-              <CardTitle className="text-lg leading-tight">{article.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm mb-4">{article.excerpt}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">By {article.author}</span>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">Read More</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>{article.title}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <img src={article.image} alt={article.title} className="w-full h-48 object-cover rounded" />
-                      <p>
-                        {article.excerpt} This article covers practical steps, common pitfalls, and
-                        how to discuss this topic with your healthcare provider. Always consult a
-                        professional for personalized advice.
-                      </p>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                <CardTitle className="text-lg leading-tight">{article.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground text-sm mb-4">{article.excerpt}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">By {article.author}</span>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">Read More</Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>{article.title}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <img src={article.image} alt={article.title} className="w-full h-64 object-cover rounded" />
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <Badge variant="secondary">{article.category}</Badge>
+                          <div className="flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {article.readTime} min read
+                          </div>
+                          <span>By {article.author}</span>
+                        </div>
+                        <div className="prose prose-sm max-w-none">
+                          <p className="text-lg font-medium mb-4">{article.excerpt}</p>
+                          <p>
+                            This comprehensive article covers practical steps, common pitfalls to avoid, 
+                            and guidance on how to discuss this topic with your healthcare provider. 
+                            You'll learn about the latest research, evidence-based practices, and 
+                            actionable tips you can implement today.
+                          </p>
+                          <p className="mt-4 font-semibold text-foreground">
+                            Always consult a healthcare professional for personalized medical advice.
+                          </p>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
       </div>
     </div>
   );
@@ -276,24 +468,30 @@ const AwarenessHub = () => {
           className="pl-10"
         />
       </div>
-      
+
       <div className="space-y-4">
-        {faqs.map((faq) => (
-          <Card key={faq.id} className="healthcare-card">
-            <CardHeader>
-              <div className="flex items-start space-x-3">
-                <HelpCircle className="h-5 w-5 text-primary mt-1" />
-                <div className="flex-1">
-                  <CardTitle className="text-lg text-foreground">{faq.question}</CardTitle>
-                  <Badge variant="outline" className="mt-2">{faq.category}</Badge>
+        {faqs
+          .filter(faq => 
+            faq.question.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            faq.answer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            faq.category.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+          .map((faq) => (
+            <Card key={faq.id} className="cursor-pointer transition-all duration-200 hover:shadow-md">
+              <CardHeader>
+                <div className="flex items-start space-x-3">
+                  <HelpCircle className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <CardTitle className="text-lg text-foreground">{faq.question}</CardTitle>
+                    <Badge variant="outline" className="mt-2">{faq.category}</Badge>
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
+              </CardContent>
+            </Card>
+          ))}
       </div>
     </div>
   );
@@ -305,16 +503,16 @@ const AwarenessHub = () => {
         <h2 className="text-2xl font-bold mb-2">Test Your Health Knowledge</h2>
         <p className="text-muted-foreground">Take quizzes to learn and earn reward points</p>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {quizzes.map((quiz) => (
-          <Card key={quiz.id} className="healthcare-card card-hover">
+          <Card key={quiz.id} className="cursor-pointer transition-all duration-200 hover:shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>{quiz.title}</span>
                 <Badge variant={
-                  quiz.difficulty === "Easy" ? "success" : 
-                  quiz.difficulty === "Medium" ? "warning" : "destructive"
+                  quiz.difficulty === "Easy" ? "default" :
+                  quiz.difficulty === "Medium" ? "secondary" : "destructive"
                 }>
                   {quiz.difficulty}
                 </Badge>
@@ -331,13 +529,13 @@ const AwarenessHub = () => {
                   {quiz.duration} min
                 </span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <Award className="h-4 w-4 text-primary mr-1" />
                   <span className="text-sm font-medium">{quiz.points} points</span>
                 </div>
-                <Button variant="hero" size="sm">Start Quiz</Button>
+                <Button variant="default" size="sm">Start Quiz</Button>
               </div>
             </CardContent>
           </Card>
@@ -353,9 +551,9 @@ const AwarenessHub = () => {
         <h2 className="text-2xl font-bold mb-2">Nutrition Checker</h2>
         <p className="text-muted-foreground">Scan food products to get health insights and nutrition scores</p>
       </div>
-      
+  
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="healthcare-card">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
               <Camera className="h-5 w-5 mr-2" />
@@ -363,26 +561,97 @@ const AwarenessHub = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">Take a photo of ingredient list or barcode</p>
-              <Button variant="hero" onClick={handleNutritionScan}>
-                <Camera className="h-4 w-4 mr-2" />
-                Scan Now
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  variant="default"
+                  onClick={handleCameraCapture}
+                  disabled={isAnalyzing}
+                  className="flex-1 sm:flex-none"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4 mr-2" />
+                      Take Photo
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleBarcodeUpload}
+                  disabled={isAnalyzing}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Image
+                </Button>
+              </div>
             </div>
-            
+  
             <div className="text-center">
               <span className="text-sm text-muted-foreground">or</span>
             </div>
-            
-            <Input placeholder="Enter product name manually..." />
-            <Button variant="outline" className="w-full">Analyze Product</Button>
+  
+            <div className="space-y-3">
+              <Input
+                placeholder="Enter product name manually..."
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                disabled={isAnalyzing}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isAnalyzing) {
+                    handleProductAnalysis();
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleProductAnalysis}
+                disabled={isAnalyzing || !productName.trim()}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="h-4 w-4 mr-2" />
+                    Analyze Product
+                  </>
+                )}
+              </Button>
+            </div>
+  
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
           </CardContent>
         </Card>
-        
-        {nutritionResult && (
-          <Card className="healthcare-card">
+  
+        {nutritionResult ? (
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Nutrition Analysis</span>
@@ -397,12 +666,16 @@ const AwarenessHub = () => {
                 <h3 className="font-semibold text-lg">{nutritionResult.product}</h3>
                 <div className="flex items-center space-x-2 mt-2">
                   <Progress value={nutritionResult.healthScore} className="flex-1" />
-                  <Badge variant={nutritionResult.healthScore >= 70 ? "success" : nutritionResult.healthScore >= 50 ? "warning" : "destructive"}>
-                    {nutritionResult.healthScore >= 70 ? "Healthy" : nutritionResult.healthScore >= 50 ? "Moderate" : "Unhealthy"}
+                  <Badge variant={
+                    nutritionResult.healthScore >= 70 ? "default" : 
+                    nutritionResult.healthScore >= 50 ? "secondary" : "destructive"
+                  }>
+                    {nutritionResult.healthScore >= 70 ? "Healthy" : 
+                     nutritionResult.healthScore >= 50 ? "Moderate" : "Unhealthy"}
                   </Badge>
                 </div>
               </div>
-              
+  
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">Calories</p>
@@ -421,18 +694,56 @@ const AwarenessHub = () => {
                   <p className="text-lg font-semibold">{nutritionResult.nutrients.sodium}mg</p>
                 </div>
               </div>
-              
+  
+              {nutritionResult.warnings && nutritionResult.warnings.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2 text-destructive" />
+                    Health Warnings
+                  </h4>
+                  <div className="space-y-2">
+                    {nutritionResult.warnings.map((warning, index) => (
+                      <div key={index} className="flex items-start space-x-2">
+                        <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+                        <span className="text-sm text-destructive">{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+  
               <div>
                 <h4 className="font-medium mb-3">Health Recommendations</h4>
                 <div className="space-y-2">
-                  {nutritionResult.recommendations.map((rec: string, index: number) => (
+                  {nutritionResult.recommendations.map((rec, index) => (
                     <div key={index} className="flex items-start space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
+                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                       <span className="text-sm">{rec}</span>
                     </div>
                   ))}
                 </div>
               </div>
+  
+              {nutritionResult.allergens && nutritionResult.allergens.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Allergen Information</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {nutritionResult.allergens.map((allergen, index) => (
+                      <Badge key={index} variant="destructive">{allergen}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Nutrition Analysis</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center py-12">
+              <Scan className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Scan a product or enter a product name to see nutrition analysis</p>
             </CardContent>
           </Card>
         )}
