@@ -191,11 +191,14 @@ const DoctorConnect = () => {
                 <SelectTrigger>
                   <SelectValue placeholder="Select specialty" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent side="top">
                   <SelectItem value="all">All Specialties</SelectItem>
                   {specialties.map((spec) => (
                     <SelectItem key={spec.value} value={spec.value}>
-                      {spec.label}
+                      <span className="flex items-center gap-2">
+                        {spec.icon && <span className="inline-flex items-center justify-center w-5 h-5"><spec.icon className="w-4 h-4" /></span>}
+                        {spec.label}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -231,7 +234,6 @@ const DoctorConnect = () => {
               <h3 className="text-lg font-semibold">Nearest Doctors</h3>
               <p className="text-sm text-muted-foreground">We use your location to suggest doctors close to you.</p>
               {geoError && <div className="text-sm text-destructive">{geoError}</div>}
-              <div className="text-xs text-muted-foreground">Powered by OpenStreetMap & Leaflet</div>
             </div>
           </div>
 
