@@ -136,6 +136,12 @@ const Chatbot = () => {
     if (synth.getVoices().length === 0) {
       synth.onvoiceschanged = () => {};
     }
+    // Stop speech when component unmounts (tab switch)
+    return () => {
+      try {
+        synth.cancel();
+      } catch {}
+    };
   }, [synth]);
 
   const handleQuickAction = (type: string) => {
