@@ -50,6 +50,7 @@ const AwarenessHub = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [nutritionResult, setNutritionResult] = useState<any>(null);
 
+
   const articles: Article[] = Array.from({ length: 36 }).map((_, i) => {
     const id = (i + 1).toString();
     const categories = [
@@ -120,7 +121,7 @@ const AwarenessHub = () => {
       category,
       readTime: 5 + (i % 7),
       author: "HealthAI Editorial Team",
-      image: "/api/placeholder/400/250"
+  image: "/api/placeholder/400/250"
     } as Article;
   });
 

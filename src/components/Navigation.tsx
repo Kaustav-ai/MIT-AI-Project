@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   LogOut,
-  Award
+  Award,
+  HelpCircle
 } from "lucide-react";
 
 const Navigation = () => {

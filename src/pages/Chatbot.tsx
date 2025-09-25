@@ -16,7 +16,8 @@ import {
   Stethoscope,
   Languages,
   Mic,
-  MicOff
+  MicOff,
+  HelpCircle
 } from "lucide-react";
 
 interface Message {
@@ -53,6 +54,7 @@ const Chatbot = () => {
     { label: "First Aid", icon: Heart, type: "first-aid" },
     { label: "Medicine Reminder", icon: Pill, type: "medication" },
     { label: "Find Doctor", icon: User, type: "doctor" },
+    { label: "Common Symptoms", icon: HelpCircle, type: "common-symptoms", link: "/symptoms" },
   ];
 
   const handleSendMessage = async () => {
@@ -264,14 +266,32 @@ const Chatbot = () => {
               <CardHeader>
                 <CardTitle className="text-lg">Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="flex flex-col gap-3">
                 {quickActions.map((action) => {
                   const Icon = action.icon;
+                  if (action.type === "common-symptoms" && action.link) {
+                    return (
+                      <a
+                        key={action.type}
+                        href={action.link}
+                        className="w-full"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start card-hover px-4 py-2"
+                        >
+                          <Icon className="h-4 w-4 mr-2" />
+                          {action.label}
+                        </Button>
+                      </a>
+                    );
+                  }
                   return (
                     <Button
                       key={action.type}
                       variant="outline"
-                      className="w-full justify-start card-hover"
+                      className="w-full justify-start card-hover px-4 py-2"
                       onClick={() => handleQuickAction(action.type)}
                     >
                       <Icon className="h-4 w-4 mr-2" />

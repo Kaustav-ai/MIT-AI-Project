@@ -18,6 +18,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Payment from "./pages/Payment";
 import AwarenessHub from "./pages/AwarenessHub";
+import CommonSymptoms from "./pages/CommonSymptoms";
 // import GoogleTranslate from "./components/googleTranslate";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/quiz/category/:category" element={<ProtectedRoute role="patient"><CategoryQuiz /></ProtectedRoute>} />
             <Route path="/rewards" element={<ProtectedRoute role="patient"><RewardsWallet /></ProtectedRoute>} />
             <Route path="/awareness" element={<ProtectedRoute role="patient"><AwarenessHub /></ProtectedRoute>} />
+            <Route path="/symptoms" element={<ProtectedRoute role="patient"><CommonSymptoms /></ProtectedRoute>} />
             <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
