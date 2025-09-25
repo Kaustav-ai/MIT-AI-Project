@@ -102,6 +102,18 @@ const DoctorConnect = () => {
       available: true,
       languages: ["English", "Hindi", "Gujarati"],
       image: "/api/placeholder/150/150"
+    },
+    {
+      id: "5",
+      name: "Dr. Farhaan Qureshi",
+      specialty: "Orthopedics",
+      rating: 4.7,
+      experience: 10,
+      location: "5 km away",
+      price: 275,
+      available: true,
+      languages: ["Hindi", "Urdu"],
+      image: "/api/placeholder/150/150"
     }
   ];
 
