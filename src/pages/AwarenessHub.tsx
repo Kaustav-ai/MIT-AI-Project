@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,240 @@ interface NutritionResult {
 }
 
 // Mock nutrition service - replace with actual API calls
+function AwarenessHub() {
+  const [activeTab, setActiveTab] = useState<"articles" | "faqs" | "quizzes" | "nutrition">("articles");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [nutritionResult, setNutritionResult] = useState<NutritionResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [productName, setProductName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const productInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const NutritionTab = () => (
+    <div className="space-y-6">
+      <div className="text-center py-8">
+        <Scan className="h-16 w-16 text-primary mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Nutrition Checker</h2>
+        <p className="text-muted-foreground">Scan food products to get health insights and nutrition scores</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Camera className="h-5 w-5 mr-2" />
+              Scan Product
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+              <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground mb-4">Take a photo of ingredient list or barcode</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  variant="default"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={isAnalyzing}
+                  className="flex-1 sm:flex-none"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4 mr-2" />
+                      Take Photo
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isAnalyzing}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Image
+                </Button>
+              </div>
+            </div>
+            <div className="text-center">
+              <span className="text-sm text-muted-foreground">or</span>
+            </div>
+            <div className="space-y-3">
+              <Input
+                placeholder="Enter product name manually..."
+                defaultValue={productName}
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={isAnalyzing}
+                ref={productInputRef}
+                onBlur={e => setProductName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !isAnalyzing) {
+                    setProductName(e.currentTarget.value);
+                    handleProductAnalysis();
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleProductAnalysis}
+                disabled={isAnalyzing || !productName.trim()}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="h-4 w-4 mr-2" />
+                    Analyze Product
+                  </>
+                )}
+              </Button>
+            </div>
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </CardContent>
+        </Card>
+        {nutritionResult ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Nutrition Analysis</span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl font-bold text-primary">{nutritionResult.healthScore}</span>
+                  <span className="text-sm text-muted-foreground">/100</span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-lg">{nutritionResult.product}</h3>
+                <div className="flex items-center space-x-2 mt-2">
+                  <Progress value={nutritionResult.healthScore} className="flex-1" />
+                  <Badge variant={
+                    nutritionResult.healthScore >= 70 ? "default" : 
+                    nutritionResult.healthScore >= 50 ? "secondary" : "destructive"
+                  }>
+                    {nutritionResult.healthScore >= 70 ? "Healthy" : 
+                     nutritionResult.healthScore >= 50 ? "Moderate" : "Unhealthy"}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Calories</p>
+                  <p className="text-lg font-semibold">{nutritionResult.nutrients.calories}</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Protein</p>
+                  <p className="text-lg font-semibold">{nutritionResult.nutrients.protein}g</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Fiber</p>
+                  <p className="text-lg font-semibold">{nutritionResult.nutrients.fiber}g</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Sodium</p>
+                  <p className="text-lg font-semibold">{nutritionResult.nutrients.sodium}mg</p>
+                </div>
+              </div>
+              {nutritionResult.warnings && nutritionResult.warnings.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2 text-destructive" />
+                    Health Warnings
+                  </h4>
+                  <div className="space-y-2">
+                    {nutritionResult.warnings.map((warning, index) => (
+                      <div key={index} className="flex items-start space-x-2">
+                        <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+                        <span className="text-sm text-destructive">{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <h4 className="font-medium mb-3">Health Recommendations</h4>
+                <div className="space-y-2">
+                  {nutritionResult.recommendations.map((rec, index) => (
+                    <div key={index} className="flex items-start space-x-2">
+                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                      <span className="text-sm">{rec}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {nutritionResult.allergens && nutritionResult.allergens.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Allergen Information</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {nutritionResult.allergens.map((allergen, index) => (
+                      <Badge key={index} variant="destructive">{allergen}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Nutrition Analysis</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center py-12">
+              <Scan className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Scan a product or enter a product name to see nutrition analysis</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+
+  function handleProductAnalysis() {
+    if (!productName.trim()) return;
+    setIsAnalyzing(true);
+    nutritionService.analyzeProduct(productName)
+      .then(result => {
+        setNutritionResult(result);
+        toast({
+          title: "Analysis Complete",
+          description: "Nutrition information has been analyzed successfully",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Analysis Failed",
+          description: "There was an error analyzing the product.",
+          variant: "destructive"
+        });
+      })
+      .finally(() => setIsAnalyzing(false));
+  }
 const nutritionService = {
   analyzeImage: async (file: File): Promise<NutritionResult> => {
     // Simulate API call delay
@@ -96,12 +330,10 @@ const nutritionService = {
   analyzeProduct: async (productName: string): Promise<NutritionResult> => {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
     // Mock response based on product name
     const healthScore = productName.toLowerCase().includes("healthy") ? 85 : 
                        productName.toLowerCase().includes("organic") ? 80 : 
                        Math.floor(Math.random() * 40) + 50;
-    
     return {
       product: productName,
       healthScore,
@@ -127,89 +359,81 @@ const nutritionService = {
   }
 };
 
-const AwarenessHub = () => {
-  const [activeTab, setActiveTab] = useState<"articles" | "faqs" | "quizzes" | "nutrition">("articles");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [nutritionResult, setNutritionResult] = useState<NutritionResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [productName, setProductName] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
+// Move titlesByCategory and articles array mapping here
+const titlesByCategory: Record<string, string[]> = {
+  "Common Diseases": [
+    "Understanding Hypertension",
+    "Recognizing Early Diabetes Signs",
+    "Managing Asthma Attacks",
+    "Migraine Triggers and Relief",
+    "Seasonal Flu: What You Need to Know",
+    "Arthritis Pain Management"
+  ],
+  "Preventive Care": [
+    "Annual Health Checkup Guide",
+    "How to Build Healthy Habits",
+    "Cancer Screening Essentials",
+    "Oral Health and Overall Wellness",
+    "Sun Safety and Skin Care",
+    "Sleep Hygiene for Better Health"
+  ],
+  "Vaccination": [
+    "Adult Vaccination Schedule",
+    "Flu Shots: Myths vs Facts",
+    "COVID-19 Booster Updates",
+    "Travel Vaccines Checklist",
+    "Childhood Immunization Basics",
+    "HPV Vaccine: Who and When"
+  ],
+  "Exercise": [
+    "Beginner Cardio Routine",
+    "Strength Training Safely",
+    "Yoga for Back Pain",
+    "Desk Stretches for Office Workers",
+    "HIIT: Pros and Cons",
+    "Walking Plans for Heart Health"
+  ],
+  "Diet & Lifestyle": [
+    "Balanced Plate: A Simple Framework",
+    "Low-Sodium Cooking Tips",
+    "Managing Cholesterol with Diet",
+    "Hydration: How Much Water?",
+    "Healthy Snacking Ideas",
+    "Diabetes-Friendly Meal Planning"
+  ],
+  "New Medicines": [
+    "Latest in Diabetes Drugs",
+    "New Cholesterol-Lowering Options",
+    "Migraine Biologics Explained",
+    "Antibiotic Stewardship 101",
+    "Vaccines in Development",
+    "Weight Loss Medications Overview"
+  ]
+};
 
-  const articles: Article[] = Array.from({ length: 36 }).map((_, i) => {
-    const id = (i + 1).toString();
-    const categories = [
-      "Common Diseases",
-      "Preventive Care",
-      "Vaccination",
-      "Exercise",
-      "Diet & Lifestyle",
-      "New Medicines"
-    ];
-    const category = categories[i % categories.length];
-    const titlesByCategory: Record<string, string[]> = {
-      "Common Diseases": [
-        "Understanding Hypertension",
-        "Recognizing Early Diabetes Signs",
-        "Managing Asthma Attacks",
-        "Migraine Triggers and Relief",
-        "Seasonal Flu: What You Need to Know",
-        "Arthritis Pain Management"
-      ],
-      "Preventive Care": [
-        "Annual Health Checkup Guide",
-        "How to Build Healthy Habits",
-        "Cancer Screening Essentials",
-        "Oral Health and Overall Wellness",
-        "Sun Safety and Skin Care",
-        "Sleep Hygiene for Better Health"
-      ],
-      "Vaccination": [
-        "Adult Vaccination Schedule",
-        "Flu Shots: Myths vs Facts",
-        "COVID-19 Booster Updates",
-        "Travel Vaccines Checklist",
-        "Childhood Immunization Basics",
-        "HPV Vaccine: Who and When"
-      ],
-      "Exercise": [
-        "Beginner Cardio Routine",
-        "Strength Training Safely",
-        "Yoga for Back Pain",
-        "Desk Stretches for Office Workers",
-        "HIIT: Pros and Cons",
-        "Walking Plans for Heart Health"
-      ],
-      "Diet & Lifestyle": [
-        "Balanced Plate: A Simple Framework",
-        "Low-Sodium Cooking Tips",
-        "Managing Cholesterol with Diet",
-        "Hydration: How Much Water?",
-        "Healthy Snacking Ideas",
-        "Diabetes-Friendly Meal Planning"
-      ],
-      "New Medicines": [
-        "Latest in Diabetes Drugs",
-        "New Cholesterol-Lowering Options",
-        "Migraine Biologics Explained",
-        "Antibiotic Stewardship 101",
-        "Vaccines in Development",
-        "Weight Loss Medications Overview"
-      ]
-    };
-    const list = titlesByCategory[category];
-    const title = list[i % list.length];
-    return {
-      id,
-      title,
-      excerpt: "Short, practical guidance to help you make informed health decisions.",
-      category,
-      readTime: 5 + (i % 7),
-      author: "HealthAI Editorial Team",
-      image: `/api/placeholder/400/250?${i}`
-    } as Article;
-  });
+const articles: Article[] = Array.from({ length: 36 }).map((_, i) => {
+  const id = (i + 1).toString();
+  const categories = [
+    "Common Diseases",
+    "Preventive Care",
+    "Vaccination",
+    "Exercise",
+    "Diet & Lifestyle",
+    "New Medicines"
+  ];
+  const category = categories[i % categories.length];
+  const list = titlesByCategory[category];
+  const title = list[i % list.length];
+  return {
+    id,
+    title,
+    excerpt: "Short, practical guidance to help you make informed health decisions.",
+    category,
+    readTime: 5 + (i % 7),
+    author: "HealthAI Editorial Team",
+    image: `/api/placeholder/400/250?${i}`
+  } as Article;
+});
 
   const faqs: FAQ[] = [
     {
@@ -328,134 +552,15 @@ const AwarenessHub = () => {
         description: "Nutrition information has been analyzed successfully",
       });
     } catch (error) {
-      console.error('Analysis error:', error);
       toast({
         title: "Analysis Failed",
-        description: "Could not analyze the image. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsAnalyzing(false);
-      if (event.target) event.target.value = '';
-    }
-  };
-
-  const handleCameraCapture = () => {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
-  };
-
-  const handleProductAnalysis = async () => {
-    if (!productName.trim()) {
-      toast({
-        title: "Product Name Required",
-        description: "Please enter a product name to analyze",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsAnalyzing(true);
-    try {
-      const result = await nutritionService.analyzeProduct(productName.trim());
-      setNutritionResult(result);
-      toast({
-        title: "Analysis Complete",
-        description: `Nutrition information for ${productName} has been analyzed`,
-      });
-    } catch (error) {
-      console.error('Analysis error:', error);
-      toast({
-        title: "Analysis Failed",
-        description: "Could not find nutrition information for this product. Please try a different product name.",
+        description: "There was an error analyzing the image.",
         variant: "destructive"
       });
     } finally {
       setIsAnalyzing(false);
     }
   };
-
-  const handleBarcodeUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const ArticlesTab = () => (
-    <div className="space-y-6">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search health articles..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {articles
-          .filter(a => a.title.toLowerCase().includes(searchTerm.toLowerCase()) || a.category.toLowerCase().includes(searchTerm.toLowerCase()))
-          .map((article) => (
-            <Card key={article.id} className="cursor-pointer transition-all duration-200 hover:shadow-lg">
-              <div className="h-48 bg-muted rounded-t-lg overflow-hidden">
-                <img src={article.image} alt={article.title} className="w-full h-full object-cover" />
-              </div>
-              <CardHeader>
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="secondary">{article.category}</Badge>
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Clock className="h-3 w-3 mr-1" />
-                    {article.readTime} min
-                  </div>
-                </div>
-                <CardTitle className="text-lg leading-tight">{article.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm mb-4">{article.excerpt}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">By {article.author}</span>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">Read More</Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-3xl">
-                      <DialogHeader>
-                        <DialogTitle>{article.title}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <img src={article.image} alt={article.title} className="w-full h-64 object-cover rounded" />
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <Badge variant="secondary">{article.category}</Badge>
-                          <div className="flex items-center">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {article.readTime} min read
-                          </div>
-                          <span>By {article.author}</span>
-                        </div>
-                        <div className="prose prose-sm max-w-none">
-                          <p className="text-lg font-medium mb-4">{article.excerpt}</p>
-                          <p>
-                            This comprehensive article covers practical steps, common pitfalls to avoid, 
-                            and guidance on how to discuss this topic with your healthcare provider. 
-                            You'll learn about the latest research, evidence-based practices, and 
-                            actionable tips you can implement today.
-                          </p>
-                          <p className="mt-4 font-semibold text-foreground">
-                            Always consult a healthcare professional for personalized medical advice.
-                          </p>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-      </div>
-    </div>
-  );
 
   const FAQsTab = () => (
     <div className="space-y-6">
@@ -503,7 +608,6 @@ const AwarenessHub = () => {
         <h2 className="text-2xl font-bold mb-2">Test Your Health Knowledge</h2>
         <p className="text-muted-foreground">Take quizzes to learn and earn reward points</p>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {quizzes.map((quiz) => (
           <Card key={quiz.id} className="cursor-pointer transition-all duration-200 hover:shadow-lg">
@@ -529,7 +633,6 @@ const AwarenessHub = () => {
                   {quiz.duration} min
                 </span>
               </div>
-
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <Award className="h-4 w-4 text-primary mr-1" />
@@ -544,213 +647,6 @@ const AwarenessHub = () => {
     </div>
   );
 
-  const NutritionTab = () => (
-    <div className="space-y-6">
-      <div className="text-center py-8">
-        <Scan className="h-16 w-16 text-primary mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Nutrition Checker</h2>
-        <p className="text-muted-foreground">Scan food products to get health insights and nutrition scores</p>
-      </div>
-  
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Camera className="h-5 w-5 mr-2" />
-              Scan Product
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-              <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">Take a photo of ingredient list or barcode</p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button
-                  variant="default"
-                  onClick={handleCameraCapture}
-                  disabled={isAnalyzing}
-                  className="flex-1 sm:flex-none"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4 mr-2" />
-                      Take Photo
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleBarcodeUpload}
-                  disabled={isAnalyzing}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Image
-                </Button>
-              </div>
-            </div>
-  
-            <div className="text-center">
-              <span className="text-sm text-muted-foreground">or</span>
-            </div>
-  
-            <div className="space-y-3">
-              <Input
-                placeholder="Enter product name manually..."
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                disabled={isAnalyzing}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isAnalyzing) {
-                    handleProductAnalysis();
-                  }
-                }}
-              />
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleProductAnalysis}
-                disabled={isAnalyzing || !productName.trim()}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Scan className="h-4 w-4 mr-2" />
-                    Analyze Product
-                  </>
-                )}
-              </Button>
-            </div>
-  
-            {/* Hidden file inputs */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </CardContent>
-        </Card>
-  
-        {nutritionResult ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Nutrition Analysis</span>
-                <div className="flex items-center space-x-2">
-                  <span className="text-2xl font-bold text-primary">{nutritionResult.healthScore}</span>
-                  <span className="text-sm text-muted-foreground">/100</span>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-semibold text-lg">{nutritionResult.product}</h3>
-                <div className="flex items-center space-x-2 mt-2">
-                  <Progress value={nutritionResult.healthScore} className="flex-1" />
-                  <Badge variant={
-                    nutritionResult.healthScore >= 70 ? "default" : 
-                    nutritionResult.healthScore >= 50 ? "secondary" : "destructive"
-                  }>
-                    {nutritionResult.healthScore >= 70 ? "Healthy" : 
-                     nutritionResult.healthScore >= 50 ? "Moderate" : "Unhealthy"}
-                  </Badge>
-                </div>
-              </div>
-  
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Calories</p>
-                  <p className="text-lg font-semibold">{nutritionResult.nutrients.calories}</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Protein</p>
-                  <p className="text-lg font-semibold">{nutritionResult.nutrients.protein}g</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Fiber</p>
-                  <p className="text-lg font-semibold">{nutritionResult.nutrients.fiber}g</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Sodium</p>
-                  <p className="text-lg font-semibold">{nutritionResult.nutrients.sodium}mg</p>
-                </div>
-              </div>
-  
-              {nutritionResult.warnings && nutritionResult.warnings.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-2 text-destructive" />
-                    Health Warnings
-                  </h4>
-                  <div className="space-y-2">
-                    {nutritionResult.warnings.map((warning, index) => (
-                      <div key={index} className="flex items-start space-x-2">
-                        <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-                        <span className="text-sm text-destructive">{warning}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-  
-              <div>
-                <h4 className="font-medium mb-3">Health Recommendations</h4>
-                <div className="space-y-2">
-                  {nutritionResult.recommendations.map((rec, index) => (
-                    <div key={index} className="flex items-start space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                      <span className="text-sm">{rec}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-  
-              {nutritionResult.allergens && nutritionResult.allergens.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3">Allergen Information</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {nutritionResult.allergens.map((allergen, index) => (
-                      <Badge key={index} variant="destructive">{allergen}</Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Nutrition Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center py-12">
-              <Scan className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Scan a product or enter a product name to see nutrition analysis</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <Layout>
       <div className="max-w-7xl mx-auto p-6">
@@ -760,23 +656,38 @@ const AwarenessHub = () => {
             Your gateway to reliable health information, interactive learning, and nutrition insights
           </p>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-8">
+        <div className="flex space-x-2 mb-8">
           <TabButton tab="articles" label="Articles" icon={BookOpen} />
           <TabButton tab="faqs" label="FAQs" icon={HelpCircle} />
           <TabButton tab="quizzes" label="Quizzes" icon={Award} />
-          <TabButton tab="nutrition" label="Nutrition" icon={Scan} />
+          <TabButton tab="nutrition" label="Nutrition Checker" icon={Scan} />
         </div>
-
-        {/* Tab Content */}
-        {activeTab === "articles" && <ArticlesTab />}
+        {activeTab === "articles" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {articles.map(article => (
+              <Card key={article.id} className="hover:shadow-lg transition-shadow duration-200">
+                <CardHeader>
+                  <img src={article.image} alt={article.title} className="w-full h-40 object-cover rounded mb-4" />
+                  <CardTitle className="text-lg font-bold mb-2">{article.title}</CardTitle>
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground mb-2">
+                    <Badge variant="secondary">{article.category}</Badge>
+                    <span className="flex items-center"><Clock className="h-3 w-3 mr-1" />{article.readTime} min read</span>
+                    <span>By {article.author}</span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-2">{article.excerpt}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
         {activeTab === "faqs" && <FAQsTab />}
         {activeTab === "quizzes" && <QuizzesTab />}
         {activeTab === "nutrition" && <NutritionTab />}
       </div>
     </Layout>
   );
-};
 
+}
 export default AwarenessHub;
